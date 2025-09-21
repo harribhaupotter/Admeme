@@ -6,7 +6,10 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "export": "next export",
+    "predeploy": "npm run build",
+    "deploy": "next build && gh-pages -d out"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -47,6 +50,7 @@
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.5.1",
     "geist": "latest",
+    "gh-pages": "^6.3.0",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "14.2.16",
@@ -72,5 +76,6 @@
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5"
-  }
+  },
+  "homepage": "https://harribhaupotter.github.io/Admeme"
 }
