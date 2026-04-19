@@ -1,0 +1,517 @@
+{
+  "name": "Trend Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8108334d-b559-453b-9d5d-a264667ec20b",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/memes+dankmemes/top/.rss?t=day",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        224
+      ],
+      "id": "645fe9a2-ccc8-4e36-ad1a-58b96c599f7d",
+      "name": "Fetch Reddit RSS"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst trends = [];\n\nfor (const item of items) {\n  const content = item.json.data || '';\n  \n  // Google Trends uses <title> directly\n  // Reddit uses <title><![CDATA[...]]></title>\n  const titleMatches = content.match(\n    /<title><!\\[CDATA\\[(.*?)\\]\\]><\\/title>|<title>([^<]{10,})<\\/title>/g\n  ) || [];\n  \n  titleMatches.forEach(match => {\n    const title = match\n      .replace(/<title><!\\[CDATA\\[/, '')\n      .replace(/\\]\\]><\\/title>/, '')\n      .replace(/<title>/, '')\n      .replace(/<\\/title>/, '')\n      .trim();\n    \n    const skipWords = ['reddit', 'memes', 'dankmemes', 'outoftheloop', \n                       'google', 'trending', 'rss', 'news'];\n    const shouldSkip = skipWords.some(w => title.toLowerCase().includes(w));\n    \n    if (title.length > 10 && !shouldSkip) {\n      trends.push({\n        text:      title,\n        source:    content.includes('google') ? 'google_trends' : 'reddit',\n        timestamp: new Date().toISOString()\n      });\n    }\n  });\n}\n\nconst unique = [...new Map(trends.map(t => [t.text, t])).values()];\nconsole.log(`Parsed ${unique.length} unique trends`);\n\nreturn unique.slice(0, 30).map(t => ({ json: t }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "5196ed74-85d8-468b-885d-105102acf891",
+      "name": "Parse_Trends_RAG"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.com/v2/embed",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    model: \"embed-english-v3.0\",\n    input_type: \"search_document\",\n    embedding_types: [\"float\"],\n    texts: [$json.text]\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "7caa648c-bf41-45a3-b780-935feb3e8a63",
+      "name": "Cohere_Embed",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "RaOUXL7zelOehHbM",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://172.17.0.3:6333/collections/meme_trends/points",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "f99e7aac-57ae-4d17-a756-5c0759bd3c1e",
+      "name": "Store_Qdrant"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    message: \"Trend ingestion complete\",\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        0
+      ],
+      "id": "e7980e87-c294-41fe-bf33-43be4a1957f0",
+      "name": "done"
+    },
+    {
+      "parameters": {
+        "url": "https://trends.google.com/trending/rss?geo=US",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "fae9ddd1-821a-494b-b4ef-d7452ee8aefa",
+      "name": "Fetch_Google_Trends"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/OutOfTheLoop/top/.rss?t=day",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        -224
+      ],
+      "id": "55e1b23c-90d7-46ce-bef7-69c977bb7e7f",
+      "name": "Fetch_Twitter_Trends"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        608,
+        -16
+      ],
+      "id": "5fe6e87d-c025-4329-a5b7-b8f91cd32673",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/MemeTemplatesOfficial/top/.rss?t=week",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "4d9a6343-23ea-4b42-885c-8d6e45c10f45",
+      "name": "Fetch_Template_RSS"
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.data || '';\nconst entries = content.match(/<entry>[\\s\\S]*?<\\/entry>/g) || [];\n\nconst templates = [];\n\nfor (const entry of entries) {\n  // Get title\n  const titleMatch = entry.match(/<title[^>]*><!\\[CDATA\\[(.*?)\\]\\]><\\/title>|<title[^>]*>([^<]+)<\\/title>/);\n  let title = titleMatch ? (titleMatch[1] || titleMatch[2] || '').trim() : '';\n  \n  // Clean HTML entities from title\n  title = title\n    .replace(/&quot;/g, '\"')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&#39;/g, \"'\")\n    .trim();\n\n  // Get clean image URL - stop at first quote/space/bracket after URL\n  const redditImgMatch = entry.match(/https:\\/\\/i\\.redd\\.it\\/([a-zA-Z0-9_-]+)\\.(jpg|jpeg|png|gif|webp)/i);\n  const previewMatch   = entry.match(/https:\\/\\/preview\\.redd\\.it\\/([a-zA-Z0-9_\\-.%]+)\\.(jpg|jpeg|png|gif|webp)/i);\n  const externalMatch  = entry.match(/https:\\/\\/external-preview\\.redd\\.it\\/([a-zA-Z0-9_\\-.%]+)\\.(jpg|jpeg|png|gif|webp)/i);\n\n  let imageUrl = '';\n  if (redditImgMatch)   imageUrl = `https://i.redd.it/${redditImgMatch[1]}.${redditImgMatch[2]}`;\n  else if (previewMatch) imageUrl = `https://preview.redd.it/${previewMatch[1]}.${previewMatch[2]}`;\n  else if (externalMatch) imageUrl = `https://external-preview.redd.it/${externalMatch[1]}.${externalMatch[2]}`;\n\n  if (title && title.length > 3) {\n    templates.push({\n      name:      title,\n      image_url: imageUrl || '',\n      source:    'reddit_template',\n      timestamp: new Date().toISOString()\n    });\n  }\n}\n\nreturn templates.slice(0, 10).map(t => ({ json: t }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        0
+      ],
+      "id": "464c27df-b204-4dfb-aef1-f51f6b6fd50c",
+      "name": "Parse_Templates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const embedding = $input.first().json.embeddings.float[0];\nconst trend = $('Parse_Trends_RAG').item.json;\n\nconst id = Math.abs(\n  trend.text.split('').reduce((a, c) => Math.imul(31, a) + c.charCodeAt(0) | 0, 0)\n);\n\nreturn [{\n  json: {\n    points: [{\n      id: id,\n      vector: embedding,\n      payload: {\n        text:      trend.text,\n        source:    trend.source,\n        timestamp: trend.timestamp\n      }\n    }]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "312da119-80a8-44ed-8bc9-a0547c460a97",
+      "name": "Build_Qdrant_Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.com/v2/embed",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    model: \"embed-english-v3.0\",\n    input_type: \"search_document\",\n    embedding_types: [\"float\"],\n    texts: [$json.name]\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2240,
+        176
+      ],
+      "id": "898ec8ef-80d1-464c-b079-f958bfb1645c",
+      "name": "Embed Single Template",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "RaOUXL7zelOehHbM",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get embedding from Cohere response\nconst embedding = $input.first().json.embeddings?.float?.[0];\n\n// Get original template from the loop's current item\nconst loopItems = $('Loop Over Items').first().json;\nconst name      = loopItems.name      || '';\nconst image_url = loopItems.image_url || '';\nconst source    = loopItems.source    || 'reddit_template';\nconst timestamp = loopItems.timestamp || new Date().toISOString();\n\nif (!name) {\n  return [{ json: { error: 'no name found', raw: loopItems } }];\n}\n\nconst id = Math.abs(\n  name.split('').reduce((a, c) => Math.imul(31, a) + c.charCodeAt(0) | 0, 0)\n);\n\nreturn [{\n  json: {\n    points: [{\n      id:     id,\n      vector: embedding,\n      payload: { name, image_url, source, timestamp }\n    }]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        176
+      ],
+      "id": "5925b4f4-0d59-48a3-98e2-ae43a9b1148d",
+      "name": "Build Payload"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://172.17.0.3:6333/collections/meme_templates/points",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2688,
+        176
+      ],
+      "id": "b44cfd8d-fcd7-4603-9213-eb3041368031",
+      "name": "Save to Qdrant"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2048,
+        0
+      ],
+      "id": "f03af104-aee9-4ebb-9fbb-1751d930886f",
+      "name": "Loop Over Items"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch_Google_Trends",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch_Twitter_Trends",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Reddit RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reddit RSS": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Parse_Trends_RAG": {
+      "main": [
+        [
+          {
+            "node": "Cohere_Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cohere_Embed": {
+      "main": [
+        [
+          {
+            "node": "Build_Qdrant_Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store_Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Fetch_Template_RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch_Google_Trends": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch_Twitter_Trends": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Parse_Trends_RAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch_Template_RSS": {
+      "main": [
+        [
+          {
+            "node": "Parse_Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse_Templates": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build_Qdrant_Payload": {
+      "main": [
+        [
+          {
+            "node": "Store_Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Single Template": {
+      "main": [
+        [
+          {
+            "node": "Build Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payload": {
+      "main": [
+        [
+          {
+            "node": "Save to Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Embed Single Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6106725a-5c36-4f9d-8fdd-7c21e4c87b25",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f064aa3249fa2c3b59c87e9052fbdfdcf06dea9d953da90bbfb49661322f3b9f"
+  },
+  "id": "BQkLvBxOIVtojF1z",
+  "tags": []
+}

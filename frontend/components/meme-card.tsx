@@ -1,0 +1,105 @@
+'use client';
+
+import { Download, BarChart2 } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { AnalyticsModal } from '@/components/analytics-modal';
+
+interface MemeCardProps {
+  id: string;
+  image: string;
+  viralityScore: number;
+  reasoning: string;
+  parameters?: {
+    socialCurrency?: number;
+    triggers?: number;
+    emotion?: number;
+    public?: number;
+    practicalValue?: number;
+    story?: number;
+    visualFamiliarity?: number;
+    textDensity?: number;
+    sentimentPolarity?: number;
+    subjectProminence?: number;
+    visualHook?: number;
+    shareFriction?: number;
+    relatabilityBreadth?: number;
+  };
+}
+
+export function MemeCard({ id, image, viralityScore, reasoning, parameters }: MemeCardProps) {
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+
+  const getScoreColor = (score: number) => {
+    if (score > 7)
+      return 'bg-emerald-500/15 text-emerald-800 ring-1 ring-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-400/30';
+    if (score > 5)
+      return 'bg-amber-500/15 text-amber-900 ring-1 ring-amber-500/25 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25';
+    return 'bg-rose-500/15 text-rose-900 ring-1 ring-rose-500/25 dark:bg-rose-500/15 dark:text-rose-200 dark:ring-rose-400/25';
+  };
+
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `meme-${id}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="group overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10">
+      <div className="relative aspect-square overflow-hidden bg-muted">
+        <img
+          src={image}
+          alt={`Meme ${id}`}
+          className="w-full h-full object-cover"
+        />
+
+        {/* Bottom Right Download Button */}
+        <div className="absolute bottom-3 right-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDownload}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/40 bg-white/95 p-0 text-primary shadow-lg backdrop-blur-sm transition-colors hover:bg-white hover:text-primary"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Virality Score and View Analytics Button */}
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Virality Score</span>
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${getScoreColor(
+              viralityScore
+            )}`}
+          >
+            {viralityScore.toFixed(1)}/10
+          </span>
+        </div>
+
+        <Button
+          onClick={() => setIsAnalyticsOpen(true)}
+          variant="outline"
+          size="sm"
+          className="flex w-full items-center justify-center gap-2 border-primary/25 bg-primary/5 text-foreground hover:border-primary/45 hover:bg-primary/10"
+        >
+          <BarChart2 className="h-4 w-4" />
+          View Analytics
+        </Button>
+      </div>
+
+      <AnalyticsModal
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
+        viralityScore={viralityScore}
+        reasoning={reasoning}
+        parameters={parameters}
+      />
+    </div>
+  );
+}
