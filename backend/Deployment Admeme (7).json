@@ -1,0 +1,985 @@
+{
+  "name": "Deployment Admeme",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meme-agent-input1",
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "options": {
+          "allowedOrigins": "*",
+          "ignoreBots": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2288,
+        320
+      ],
+      "id": "392abd67-342b-42bf-8852-93981d53b035",
+      "name": "Webhook1",
+      "webhookId": "47865168-5fa9-4851-8c40-ead694bc5229"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    model: \"meta-llama/llama-4-scout-17b-16e-instruct\",\n    temperature: 0.7,\n    messages: [\n      {\n        role: \"system\",\n        content: \"You are a meme marketing strategist. You output ONLY valid JSON arrays, nothing else.\"\n      },\n      {\n        role: \"user\",\n        content: `A brand wants to create viral memes.\n\nBrand: ${$('Code in JavaScript5').first().json.brand_name}\nProduct: ${$('Code in JavaScript5').first().json.product_or_service}\nTarget Audience: ${$('Code in JavaScript5').first().json.target_audience}\nCampaign Goal: ${$('Code in JavaScript5').first().json.campaign_goal}\nTone: ${$('Code in JavaScript5').first().json.tone}\nAvoid: ${$('Code in JavaScript5').first().json.topics_to_avoid}\nCurrent trending topics: ${$('Extract_Trends').first().json.trends_string}\n\nGenerate exactly 6 meme-worthy keywords or concepts that connect this product to internet culture and resonate with the target audience.\n\nOutput ONLY a JSON array of strings, no explanation:\n[\"keyword1\", \"keyword2\", \"keyword3\", \"keyword4\", \"keyword5\", \"keyword6\"]`\n      }\n    ]\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1024,
+        256
+      ],
+      "id": "b44d17b8-d103-41d4-9ad3-7583413f31f7",
+      "name": "HTTP Request3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dJiYkaaTInx3cWZN",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Groq returns OpenAI format: response.choices[0].message.content\nconst response = $input.first().json;\nconst content = response.choices?.[0]?.message?.content || '';\n\nif (!content) {\n  return [{ json: { keywords: [], error: 'No response from Groq' } }];\n}\n\n// Extract JSON array from response\nconst jsonMatch = content.match(/\\[[\\s\\S]*?\\]/);\nlet keywords = [];\n\nif (jsonMatch) {\n  try {\n    keywords = JSON.parse(jsonMatch[0]);\n  } catch(e) {\n    // Fallback: split by comma\n    keywords = content.replace(/[\\[\\]\"]/g, '').split(',').map(k => k.trim());\n  }\n}\n\nreturn [{ json: { keywords: keywords.slice(0, 6) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        256
+      ],
+      "id": "687b3a2d-5fb7-47b5-a05a-1e6f28e35af0",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: 2 items from Merge (Append)\nconst keywords = $input.all().find(i => i.json.keywords)?.json.keywords || [];\nconst templates = $input.all().find(i => i.json.templates)?.json.templates || [];\n\nreturn [{\n  json: {\n    keywords,\n    templates\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        592
+      ],
+      "id": "6b93c216-1ede-409f-bd3a-ff78f7b0ff16",
+      "name": "Remove_{undefined}1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -272,
+        592
+      ],
+      "id": "e412b18d-2059-4a51-af4a-cd220d1f79ed",
+      "name": "Merge_kw&templet1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const memes = $input.first().json.data?.memes || [];\nconst keywords = ($input.first().json.keywords || []).slice(0, 3).map(k => k.toLowerCase());\nconst trendingNames = ($input.first().json.trending_template_names || []).map(n => n.toLowerCase());\n\n// 1. Calculate the scores (Keep your original logic)\nconst scored = memes.map(meme => {\n  const name = meme.name.toLowerCase();\n  const keywordScore = keywords.filter(k => name.includes(k)).length;\n  const trendScore = trendingNames.some(t => {\n    const tWords = t.split(' ');\n    return tWords.some(w => w.length > 4 && name.includes(w));\n  }) ? 1 : 0;\n  return { ...meme, score: keywordScore + trendScore };\n});\n\n// 2. The Fix: Keep top 15, mix in 15 random others for variety\nconst top15 = scored.sort((a, b) => b.score - a.score).slice(0, 15);\nconst theRest = scored.slice(15).sort(() => 0.5 - Math.random()).slice(0, 15);\n\n// 3. Combine and shuffle the 30 templates so Groq gets high relevance AND high variety\nconst combinedPool = [...top15, ...theRest].sort(() => 0.5 - Math.random());\n\nreturn [{\n  json: {\n    templates: combinedPool,\n    keywords: keywords\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        368
+      ],
+      "id": "38e31576-b857-4281-b2eb-4d139cdd1272",
+      "name": "Filter_templet1"
+    },
+    {
+      "parameters": {
+        "url": "https://api.imgflip.com/get_memes",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -656,
+        256
+      ],
+      "id": "dde35ece-f79e-496f-ad4a-c7fddc6730cc",
+      "name": "Get_100_templets1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst content = response.choices?.[0]?.message?.content || '';\nconst allMemes = $('Get_100_templets1').first().json.data?.memes || [];\n\nconst jsonMatch = content.match(/\\[[\\s\\S]*?\\]/);\n\nif (!jsonMatch) {\n  return [{ json: { selected_templates: [] } }];\n}\n\nlet selected = [];\ntry {\n  const raw = JSON.parse(jsonMatch[0]);\n  selected = raw.map((item) => {\n    const idStr = String(item.id || '');\n    const found = allMemes.find((t) => String(t.id) === idStr) || {};\n    return {\n      id:   idStr,\n      name: String(item.name || found.name || \"Unknown\"),\n      url:  String(found.url || \"\")\n    };\n  });\n} catch(err) {\n  console.log(\"Parse error:\", String(err));\n}\n\nreturn [{ json: { selected_templates: selected } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        592
+      ],
+      "id": "323fa656-373e-48c1-966c-cf100491198b",
+      "name": "parse_JSON1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const input = $('Code in JavaScript5').first().json;\n\n// Get keywords - try multiple sources\nconst keywords = $('Filter_templet1').first().json.keywords ||\n                 $('Code in JavaScript6').first().json.keywords || [];\n\n// Get templates from Filter_templet1\nconst templates = $json.templates || $('Filter_templet1').first().json.templates || [];\n\n// Get trending Reddit template names for context\nconst trendingNames = $('Merge_Templates').first().json.trending_template_names || [];\n\nconst templatesText = templates\n  .map(t => `- \"${t.name}\" (ID: ${t.id})`)\n  .join('\\n');\n\nconst trendingText = trendingNames.length > 0\n  ? `\\nCURRENTLY TRENDING TEMPLATE STYLES (use as inspiration):\\n${trendingNames.join(', ')}`\n  : '';\n\nreturn {\n  json: {\n    model: \"meta-llama/llama-4-scout-17b-16e-instruct\",\n    temperature: 1.2,\n    messages: [\n      {\n        role: \"system\",\n        content: \"You are a meme template selector. You output ONLY valid JSON arrays, nothing else. No explanation, no markdown.\"\n      },\n      {\n        role: \"user\",\n        content: `Pick the 10 best meme templates for this brand.\\n\\nBRAND: ${input.brand_name}\\nPRODUCT: ${input.product_or_service}\\nAUDIENCE: ${input.target_audience}\\nTONE: ${input.tone}\\nKEYWORDS: ${keywords.join(', ')}\\n${trendingText}\\n\\nAVAILABLE TEMPLATES:\\n${templatesText}\\n\\nChoose exactly 10 templates that are recognizable to the audience and match the tone.\\nIMPORTANT: Prioritize variety — avoid picking the same templates repeatedly.\\nPrefer templates that haven't been commonly used for this brand type.\\nPick at least a few unexpected/creative templates that still fit the brand.\\n\\nOUTPUT ONLY THIS JSON ARRAY WITH EXACTLY 10 OBJECTS:\\n[\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"},\\n  {\"id\": \"<id>\", \"name\": \"<name>\"}\\n]`\n      }\n    ]\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        592
+      ],
+      "id": "90fea8de-812c-48bc-ab23-c20b756253bb",
+      "name": "promptstring_builder1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        336,
+        592
+      ],
+      "id": "8fef16ce-e0b2-48a8-b63a-b5b4ebc28a6c",
+      "name": "recommended_templets1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dJiYkaaTInx3cWZN",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.imgflip.com/caption_image",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "specifyBody": "string",
+        "body": "={{ \n  { \n    ...$json.imgflip_payload, \n    username: $(\"Get_Secrets\").first().json.username, \n    password: $(\"Get_Secrets\").first().json.password \n  } \n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        608
+      ],
+      "id": "905ecdce-7c07-41d4-879e-d7a3a3ee0be7",
+      "name": "templet1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const selectedTemplates = $input.all()[0].json.selected_templates || [];\n\nreturn selectedTemplates.map(t => ({\n  json: {\n    id: t.id,\n    name: t.name,\n    reason: t.reason\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        592
+      ],
+      "id": "860440cf-d837-47b7-81f3-a78b58c8ed5e",
+      "name": "split_array_seperate1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1936,
+        608
+      ],
+      "id": "281e674d-4649-4743-9bbe-5af544fa5505",
+      "name": "Download image"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst originalMemes = $('Enrich_Meme_Output').first().json.memes || [];\n\nlet aiResults = [];\ntry {\n  const content = raw.choices?.[0]?.message?.content || '[]';\n  const cleaned = content.replace(/```json|```/g, '').trim();\n  aiResults = JSON.parse(cleaned);\n  if (!Array.isArray(aiResults)) {\n    aiResults = [aiResults];\n  }\n} catch (e) {\n  console.log(\"Parse error:\", e.message);\n}\n\nreturn originalMemes.map((memeData, index) => {\n  let jarvis = {};\n  try {\n    const parsed = aiResults[index] || aiResults[0] || {};\n    const p = parsed.parameters || {\n        social_currency: 0, triggers: 0, emotion: 0, public_value: 0, practical_value: 0, storytelling: 0,\n        visual_familiarity: 0, text_density: 0, sentiment_polarity: 0, subject_prominence: 0,\n        visual_hooks: 0, share_friction: 0, relatability_breadth: 0\n    };\n    \n    const stepps    = (p.social_currency + p.triggers + p.emotion + p.public_value + p.practical_value + p.storytelling) / 6 || 0;\n    const cognitive = (p.visual_familiarity + p.text_density + p.sentiment_polarity + p.subject_prominence) / 4 || 0;\n    const tipping   = (p.visual_hooks + p.share_friction + p.relatability_breadth) / 3 || 0;\n    const virality  = (stepps * 0.50) + (cognitive * 0.25) + (tipping * 0.25) || 0;\n\n    jarvis = {\n      parameters: p,\n      scores: {\n        stepps_score:    Math.round(stepps * 100) / 100,\n        cognitive_score: Math.round(cognitive * 100) / 100,\n        tipping_score:   Math.round(tipping * 100) / 100,\n        virality_score:  Math.round(virality * 100) / 100\n      },\n      verdict:   virality >= 3.5 ? \"VIRAL\" : \"NOT_VIRAL\",\n      reasoning: parsed.reasoning || \"Failed to evaluate.\"\n    };\n  } catch(e) {\n    jarvis = { scores: {virality_score: 0, stepps_score: 0, cognitive_score: 0, tipping_score: 0}, verdict: \"NOT_VIRAL\", parameters: {}, reasoning: \"Error\" };\n  }\n\n  const scores = jarvis.scores;\n  return {\n    json: {\n      status:          scores.virality_score >= 3.5 ? \"Approved ✅\" : \"Low Virality ❌\",\n      meme_url:        memeData.url           || \"\",\n      page_url:        memeData.page_url      || \"\",\n      template_name:   memeData.template_name || \"\",\n      caption_top:     memeData.text0         || \"\",\n      caption_bottom:  memeData.text1         || \"\",\n      virality_score:  scores.virality_score,\n      stepps_score:    scores.stepps_score,\n      cognitive_score: scores.cognitive_score,\n      tipping_score:   scores.tipping_score,\n      verdict:         jarvis.verdict,\n      reasoning:       jarvis.reasoning,\n      parameters:      jarvis.parameters\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        848
+      ],
+      "id": "a5f7cb12-d5f6-4424-84f2-3735100f5ba7",
+      "name": "Final_Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  return {\n    json: {\n      url:           item.json.url,\n      page_url:      item.json.page_url,\n      text0:         item.json.text0,\n      text1:         item.json.text1,\n      template_name: item.json.template_name || \"\",\n    },\n    binary: {\n      data: item.binary.data\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        608
+      ],
+      "id": "36909725-371d-461c-993b-a7d25f76eb82",
+      "name": "prep_critic"
+    },
+    {
+      "parameters": {
+        "jsCode": "// New input parser - replaces the old website scraping logic\nconst body = $input.first().json.body;\n\n// Validate required fields\nconst required = ['brand_name', 'product_or_service', 'target_audience'];\nconst missing = required.filter(f => !body[f] || body[f].trim() === '');\n\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\n// Clean and structure the input\nreturn [{\n  json: {\n    brand_name:        body.brand_name.trim(),\n    product_or_service: body.product_or_service.trim(),\n    target_audience:   body.target_audience.trim(),\n    campaign_goal:     (body.campaign_goal || 'brand awareness').trim(),\n    tone:              (body.tone || 'witty').trim(),\n    topics_to_avoid:   (body.topics_to_avoid || 'none').trim(),\n    \n    // Keep these for downstream nodes that reference them\n    user_description:  `${body.brand_name} - ${body.product_or_service}`,\n    timestamp:         new Date().toISOString(),\n    campaign_id:       Math.random().toString(36).substring(2, 10).toUpperCase()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2080,
+        272
+      ],
+      "id": "db420225-7926-47c7-9895-92895965f894",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.com/v2/embed",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    model: \"embed-english-v3.0\",\n    input_type: \"search_query\",\n    embedding_types: [\"float\"],\n    texts: [\n      `${$('Code in JavaScript5').first().json.brand_name} ${$('Code in JavaScript5').first().json.product_or_service} ${$('Code in JavaScript5').first().json.target_audience}`\n    ]\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1664,
+        272
+      ],
+      "id": "8721fa45-9dd6-43c9-986a-04ee5a45d4bd",
+      "name": "Embed_Brand_Brief",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "RaOUXL7zelOehHbM",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.3:6333/collections/meme_trends/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    vector: $json.embeddings.float[0],\n    limit: 5,\n    with_payload: true\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1456,
+        272
+      ],
+      "id": "1a5a2313-a58c-4d0d-95a4-81cb45972fa0",
+      "name": "Query_Qdrant"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.first().json.result || [];\n\n// Deduplicate by text\nconst seen = new Set();\nconst trends = [];\nfor (const r of results) {\n  const text = r.payload.text;\n  if (!seen.has(text)) {\n    seen.add(text);\n    trends.push(text);\n  }\n}\n\nreturn [{\n  json: {\n    relevant_trends: trends,\n    trends_string: trends.join(', ')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1248,
+        272
+      ],
+      "id": "ca005bf8-9489-47ad-8643-d902757906c2",
+      "name": "Extract_Trends"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.3:6333/collections/meme_templates/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    vector: $('Embed_Brand_Brief').first().json.embeddings.float[0],\n    limit: 10,\n    with_payload: true\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -448,
+        256
+      ],
+      "id": "a5c0aef3-30a6-44ca-850c-00c4df1e7155",
+      "name": "Query_Template_Qdrant"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get Imgflip classics\nconst imgflipMemes = $('Get_100_templets1').first().json.data?.memes || [];\nconst imgflipTemplates = imgflipMemes.slice(0, 50).map(m => ({\n  id:     m.id,\n  name:   m.name,\n  source: 'imgflip'\n}));\n\n// Get Reddit template names from Qdrant (for inspiration only)\nconst qdrantResults = $('Query_Template_Qdrant').first().json.result || [];\nconst redditNames = qdrantResults.map(r => r.payload?.name || '').filter(n => n);\n\nconsole.log(`Imgflip: ${imgflipTemplates.length} | Reddit inspiration: ${redditNames.length}`);\n\nreturn [{\n  json: {\n    // Pass memes in the format Filter_templet1 expects\n    data: {\n      memes: imgflipTemplates\n    },\n    keywords:              $('Code in JavaScript6').first().json.keywords || [],\n    trending_template_names: redditNames\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        256
+      ],
+      "id": "f93c15de-9cc2-4c4e-9b6e-ba0b66aa542d",
+      "name": "Merge_Templates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst sourceItems = $('parse_groq').all(); // grab template names + captions from here\nconst memes = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  \n  if (item.json?.success && item.json?.data?.url) {\n    const source = sourceItems[i]?.json || {};\n    \n    memes.push({\n        url:           item.json.data.url,\n        page_url:      item.json.data.page_url,\n        success:       true,\n        template_name: source.template_name || source.name || \"\",\n        text0:         source.text0 || \"\",\n        text1:         source.text1 || \"\"\n    });\n  } else {\n    console.log(\"Skipping failed meme:\", JSON.stringify(item.json));\n  }\n}\n\nreturn [{ json: { memes } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        608
+      ],
+      "id": "cf00a989-4c8b-4792-9376-22f63b7b21d6",
+      "name": "Enrich_Meme_Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass ALL items through, don't collapse to one\nreturn $input.all().map(item => ({\n  json: {\n    id:   item.json.id,\n    name: item.json.name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        592
+      ],
+      "id": "cb800dbe-d3b9-4d7f-87c2-b597e018d7fc",
+      "name": "Store_Template_ID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    model: \"llama-3.1-8b-instant\",\n    temperature: 0.1,\n    max_tokens: 3000,\n    messages: [\n      {\n        role: \"system\",\n        content: \"You are a meme virality analyst. Score the provided array of memes. Return ONLY a valid JSON array of objects. No explanation, no markdown.\"\n      },\n      {\n        role: \"user\",\n        content: \"Evaluate these memes:\\n\" + JSON.stringify($json.memes, null, 2) + \"\\n\\nFor each meme, provide a JSON object with this exact structure:\\n{\\\"parameters\\\":{\\\"social_currency\\\":0.0,\\\"triggers\\\":0.0,\\\"emotion\\\":0.0,\\\"public_value\\\":0.0,\\\"practical_value\\\":0.0,\\\"storytelling\\\":0.0,\\\"visual_familiarity\\\":0.0,\\\"text_density\\\":0.0,\\\"sentiment_polarity\\\":0.0,\\\"subject_prominence\\\":0.0,\\\"visual_hooks\\\":0.0,\\\"share_friction\\\":0.0,\\\"relatability_breadth\\\":0.0},\\\"scores\\\":{\\\"stepps_score\\\":0.0,\\\"cognitive_score\\\":0.0,\\\"tipping_score\\\":0.0,\\\"virality_score\\\":0.0},\\\"verdict\\\":\\\"VIRAL or NOT_VIRAL\\\",\\\"reasoning\\\":\\\"one sentence\\\"}\\n\\nIMPORTANT: REPLACE ALL 0.0 WITH YOUR ACTUAL 1.0-5.0 SCORES.\\nThe output MUST be a JSON array [ {...}, {...} ] matching the length of the input memes array, in the exact same order.\"\n      }\n    ]\n  })\n}}",
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3632,
+        848
+      ],
+      "id": "883c0d36-5dd1-4ade-8d36-4ddd64cbb38b",
+      "name": "Virality_Score_Jarvis",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dJiYkaaTInx3cWZN",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\n// Using a standard 'for' loop prevents the 'this' context error\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  let base64String = \"\";\n\n  // Check if binary data named 'data' actually exists for this item\n  if (item.binary && item.binary.data) {\n    // Fetch the file from n8n's disk using the current item's index (i)\n    const buffer = await this.helpers.getBinaryDataBuffer(i, 'data');\n    base64String = buffer.toString('base64');\n  }\n\n  // Push the original JSON plus our new real base64 string\n  results.push({\n    json: {\n      ...item.json,\n      image_base64: base64String\n    },\n    binary: item.binary\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        608
+      ],
+      "id": "0c75886b-71fe-4f0a-88a3-61370c58e506",
+      "name": "Convert binary → base64"
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2768,
+        608
+      ],
+      "id": "a187b27f-aaa3-4d62-a497-3ccd29e21998",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "jSxdxk6vQKMOiQQl",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/jSxdxk6vQKMOiQQl"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -2000,
+        528
+      ],
+      "id": "3abe4786-a025-43e9-b131-926df730b259",
+      "name": "Get_Secrets"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    model: \"meta-llama/llama-4-scout-17b-16e-instruct\",\n    temperature: 0.85, \n    messages: [\n      {\n        role: \"system\",\n        content: \"You are a witty, sarcastic Gen-Z meme creator. You MUST output a single valid JSON object with exactly 4 keys: text0, text1, text2, text3. No markdown, no explanations.\"\n      },\n      {\n        role: \"user\",\n        content: `Write a viral meme.\n\nPRODUCT: ${$('Code in JavaScript5').first().json.product_or_service}\nAUDIENCE: ${$('Code in JavaScript5').first().json.target_audience}\nFOCUS TOPIC: \"${$('Code in JavaScript6').first().json.keywords[$itemIndex % $('Code in JavaScript6').first().json.keywords.length]}\"\n\nTEMPLATE NAME: ${$json.name}\n\nTEMPLATE FORMATS:\n- \"Anakin Padme\": text0=Anakin says something slightly concerning, text1=Padme asks a hopeful question, text2=Anakin stares silently (use \"...\"), text3=Padme repeats question worriedly.\n- \"Gru's Plan\": text0=Step 1, text1=Step 2, text2=Twist (same as Step 2), text3=Realization.\n- \"Distracted Boyfriend\": text0=Boring thing, text1=Me, text2=Exciting thing, text3=\"\"\n- Default 2-panel: text0=Setup, text1=Punchline, text2=\"\", text3=\"\"\n\nSTRICT RULES:\n1. Make the joke specifically about the FOCUS TOPIC.\n2. NO corporate marketing speak. Be sarcastic and relatable.\n3. Keep text short (max 10 words per box).\n4. You MUST provide \"text0\", \"text1\", \"text2\", and \"text3\". If a box isn't needed, make it an empty string \"\".\n\nOUTPUT EXACTLY THIS JSON FORMAT:\n{\"text0\": \"...\", \"text1\": \"...\", \"text2\": \"...\", \"text3\": \"...\"}`\n      }\n    ]\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        592
+      ],
+      "id": "49f2b34e-5702-402b-97aa-8f464f9bbc8f",
+      "name": "Generate_Captions_Groq",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dJiYkaaTInx3cWZN",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst templateItems = $('Store_Template_ID').all();\nconst allMemes = $('Get_100_templets1').first().json.data?.memes || [];\nconst output = [];\n\nconst enforceWordLimit = (text, limit) => {\n  if (!text) return \"\";\n  return text.trim().replace(/\\n/g, \" \").split(/\\s+/).slice(0, limit).join(\" \");\n};\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const content = item.json.choices?.[0]?.message?.content || '';\n\n  const templateId   = String(templateItems[i]?.json?.id || '');\n  const templateName = String(templateItems[i]?.json?.name || '');\n  const foundMeme = allMemes.find(m => String(m.id) === templateId);\n  const boxCount = foundMeme ? foundMeme.box_count : 2; \n\n  if (!content) continue;\n\n  const jsonMatch = content.match(/\\{[\\s\\S]*?\\}/);\n  if (!jsonMatch) continue;\n\n  let parsed;\n  try {\n    parsed = JSON.parse(jsonMatch[0]);\n  } catch(err) {\n    continue;\n  }\n\n  // 🔒 SECURED: No credentials here at all!\n  const imgflipPayload = {\n    template_id: templateId\n  };\n\n  if (parsed.text0 && boxCount > 0) imgflipPayload[\"boxes[0][text]\"] = enforceWordLimit(parsed.text0, 10);\n  if (parsed.text1 && boxCount > 1) imgflipPayload[\"boxes[1][text]\"] = enforceWordLimit(parsed.text1, 10);\n  if (parsed.text2 && boxCount > 2) imgflipPayload[\"boxes[2][text]\"] = enforceWordLimit(parsed.text2, 10);\n  if (parsed.text3 && boxCount > 3) imgflipPayload[\"boxes[3][text]\"] = enforceWordLimit(parsed.text3, 10);\n\n  output.push({\n    json: {\n      id: templateId,\n      name: templateName,\n      imgflip_payload: imgflipPayload,\n      template_name: templateName,           // ADD THIS\n      text0: enforceWordLimit(parsed.text0, 10),  // ADD THIS\n      text1: enforceWordLimit(parsed.text1, 10)   // ADD THIS\n    }\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        592
+      ],
+      "id": "e3caea85-73fd-45c0-9dc5-01e05b38ba64",
+      "name": "parse_groq"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3136,
+        752
+      ],
+      "id": "11f43068-9434-4920-b652-0a0b6263bd9b",
+      "name": "Wait",
+      "webhookId": "f37c9440-b171-4b99-9200-077757904ff6"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item, i) => {\n  const output = {\n    json: {\n      // Meme data\n      url:           item.json.url,\n      page_url:      item.json.page_url,\n      text0:         item.json.text0,\n      text1:         item.json.text1,\n      template_name: item.json.template_name || \"\",\n      meme_url:      item.json.url,\n      _idx:          i,\n      \n      // Virality scores (CRITICAL!)\n      status:        item.json.status || \"Low Virality ❌\",\n      virality_score: item.json.virality_score ?? 0,\n      stepps_score:  item.json.stepps_score ?? 0,\n      cognitive_score: item.json.cognitive_score ?? 0,\n      tipping_score: item.json.tipping_score ?? 0,\n      verdict:       item.json.verdict || \"NOT_VIRAL\",\n      reasoning:     item.json.reasoning || \"\",\n      \n      // Scoring parameters\n      parameters:    item.json.parameters || {\n        social_currency: 0,\n        triggers: 0,\n        emotion: 0,\n        public_value: 0,\n        practical_value: 0,\n        storytelling: 0,\n        visual_familiarity: 0,\n        text_density: 0,\n        sentiment_polarity: 0,\n        subject_prominence: 0,\n        visual_hooks: 0,\n        share_friction: 0,\n        relatability_breadth: 0\n      }\n    }\n  };\n  \n  if (item.binary && item.binary.data) {\n    output.binary = { data: item.binary.data };\n  }\n  \n  return output;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        672
+      ],
+      "id": "24c34881-7c7b-4359-9d82-d540bd2424de",
+      "name": "Prep_Scorer"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3360,
+        656
+      ],
+      "id": "ee99bcf4-3093-4001-9e42-aafc7c207f58",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "amount": 2.5
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3776,
+        848
+      ],
+      "id": "9b80d0dd-5976-45a2-9ca5-d2b0587a9a58",
+      "name": "Wait1",
+      "webhookId": "ba063024-f7f0-4e76-9ae3-89a7a775ef7c"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "Get_100_templets1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge_kw&templet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove_{undefined}1": {
+      "main": [
+        [
+          {
+            "node": "promptstring_builder1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge_kw&templet1": {
+      "main": [
+        [
+          {
+            "node": "Remove_{undefined}1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter_templet1": {
+      "main": [
+        [
+          {
+            "node": "Merge_kw&templet1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get_100_templets1": {
+      "main": [
+        [
+          {
+            "node": "Query_Template_Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_JSON1": {
+      "main": [
+        [
+          {
+            "node": "split_array_seperate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "promptstring_builder1": {
+      "main": [
+        [
+          {
+            "node": "recommended_templets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "recommended_templets1": {
+      "main": [
+        [
+          {
+            "node": "parse_JSON1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "templet1": {
+      "main": [
+        [
+          {
+            "node": "Enrich_Meme_Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "split_array_seperate1": {
+      "main": [
+        [
+          {
+            "node": "Store_Template_ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download image": {
+      "main": [
+        [
+          {
+            "node": "prep_critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final_Output": {
+      "main": [
+        []
+      ]
+    },
+    "prep_critic": {
+      "main": [
+        [
+          {
+            "node": "Convert binary → base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Get_Secrets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed_Brand_Brief": {
+      "main": [
+        [
+          {
+            "node": "Query_Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query_Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Extract_Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract_Trends": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query_Template_Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Merge_Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge_Templates": {
+      "main": [
+        [
+          {
+            "node": "Filter_templet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich_Meme_Output": {
+      "main": [
+        [
+          {
+            "node": "Virality_Score_Jarvis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store_Template_ID": {
+      "main": [
+        [
+          {
+            "node": "Generate_Captions_Groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Virality_Score_Jarvis": {
+      "main": [
+        [
+          {
+            "node": "Final_Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert binary → base64": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Prep_Scorer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Secrets": {
+      "main": [
+        [
+          {
+            "node": "Embed_Brand_Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_Captions_Groq": {
+      "main": [
+        [
+          {
+            "node": "parse_groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_groq": {
+      "main": [
+        [
+          {
+            "node": "templet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep_Scorer": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Virality_Score_Jarvis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Final_Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4a0909b4-748d-43ad-ab70-85659a9b71cb",
+  "meta": {
+    "instanceId": "f064aa3249fa2c3b59c87e9052fbdfdcf06dea9d953da90bbfb49661322f3b9f"
+  },
+  "id": "MQrvUIBu6WsmIGEi",
+  "tags": []
+}

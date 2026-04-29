@@ -16,6 +16,9 @@ interface AnalyticsModalProps {
   isOpen: boolean;
   onClose: () => void;
   viralityScore: number;
+  steppsScore?: number;
+  cognitiveScore?: number;
+  tippingScore?: number;
   reasoning: string;
   parameters?: {
     socialCurrency?: number;
@@ -36,7 +39,7 @@ interface AnalyticsModalProps {
 
 interface Metric {
   label: string;
-  value: number;
+  value?: number;
   category: string;
 }
 
@@ -44,29 +47,32 @@ export function AnalyticsModal({
   isOpen,
   onClose,
   viralityScore,
+  steppsScore,
+  cognitiveScore,
+  tippingScore,
   reasoning,
   parameters = {},
 }: AnalyticsModalProps) {
   const [expandedReasoning, setExpandedReasoning] = useState(false);
 
-  // 13 AI parameters grouped by category - use passed parameters or fallbacks
+  // 13 AI parameters grouped by category - render backend values only.
   const metrics: Metric[] = [
     // STEPPS Metrics
-    { label: 'Social Currency', value: parameters.socialCurrency ?? 8.5, category: 'STEPPS' },
-    { label: 'Triggers', value: parameters.triggers ?? 7.8, category: 'STEPPS' },
-    { label: 'Emotion', value: parameters.emotion ?? 8.2, category: 'STEPPS' },
-    { label: 'Public', value: parameters.public ?? 7.5, category: 'STEPPS' },
-    { label: 'Practical Value', value: parameters.practicalValue ?? 6.9, category: 'STEPPS' },
-    { label: 'Story', value: parameters.story ?? 8.1, category: 'STEPPS' },
+    { label: 'Social Currency', value: parameters.socialCurrency, category: 'STEPPS' },
+    { label: 'Triggers', value: parameters.triggers, category: 'STEPPS' },
+    { label: 'Emotion', value: parameters.emotion, category: 'STEPPS' },
+    { label: 'Public', value: parameters.public, category: 'STEPPS' },
+    { label: 'Practical Value', value: parameters.practicalValue, category: 'STEPPS' },
+    { label: 'Story', value: parameters.story, category: 'STEPPS' },
     // Cognitive Metrics
-    { label: 'Visual Familiarity', value: parameters.visualFamiliarity ?? 7.3, category: 'Cognitive' },
-    { label: 'Text Density', value: parameters.textDensity ?? 6.5, category: 'Cognitive' },
-    { label: 'Sentiment Polarity', value: parameters.sentimentPolarity ?? 8.0, category: 'Cognitive' },
-    { label: 'Subject Prominence', value: parameters.subjectProminence ?? 7.7, category: 'Cognitive' },
+    { label: 'Visual Familiarity', value: parameters.visualFamiliarity, category: 'Cognitive' },
+    { label: 'Text Density', value: parameters.textDensity, category: 'Cognitive' },
+    { label: 'Sentiment Polarity', value: parameters.sentimentPolarity, category: 'Cognitive' },
+    { label: 'Subject Prominence', value: parameters.subjectProminence, category: 'Cognitive' },
     // Tipping Point Metrics
-    { label: 'Visual Hook', value: parameters.visualHook ?? 8.4, category: 'Tipping Point' },
-    { label: 'Share Friction', value: parameters.shareFriction ?? 7.2, category: 'Tipping Point' },
-    { label: 'Relatability Breadth', value: parameters.relatabilityBreadth ?? 7.9, category: 'Tipping Point' },
+    { label: 'Visual Hook', value: parameters.visualHook, category: 'Tipping Point' },
+    { label: 'Share Friction', value: parameters.shareFriction, category: 'Tipping Point' },
+    { label: 'Relatability Breadth', value: parameters.relatabilityBreadth, category: 'Tipping Point' },
   ];
 
   const steppsMetrics = metrics.filter((m) => m.category === 'STEPPS');
@@ -79,18 +85,26 @@ export function AnalyticsModal({
     return 'from-chart-3 via-amber-400 to-orange-500';
   };
 
+  const formatMetricValue = (value?: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(1)}/5` : 'N/A';
+
+  const metricWidth = (value?: number) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, (value / 5) * 100));
+  };
+
   const MetricProgressBar = ({ metric }: { metric: Metric }) => (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-foreground">{metric.label}</label>
         <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-          {metric.value.toFixed(1)}/10
+          {formatMetricValue(metric.value)}
         </span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-muted/80 ring-1 ring-border/60">
         <div
           className={`h-full rounded-full bg-gradient-to-r ${barGradient(metric.category)} transition-all duration-500 shadow-sm`}
-          style={{ width: `${(metric.value / 10) * 100}%` }}
+          style={{ width: `${metricWidth(metric.value)}%` }}
         />
       </div>
     </div>
@@ -141,12 +155,12 @@ export function AnalyticsModal({
                   <span className="bg-gradient-to-br from-foreground to-foreground/65 bg-clip-text text-4xl font-bold text-transparent dark:from-primary dark:to-chart-4">
                     {viralityScore.toFixed(1)}
                   </span>
-                  <span className="text-lg text-muted-foreground">/10</span>
+                  <span className="text-lg text-muted-foreground">/5</span>
                 </div>
                 <div className="flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 via-chart-4/15 to-chart-2/20 ring-2 ring-primary/20">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-foreground">
-                      {Math.round((viralityScore / 10) * 100)}%
+                      {Math.round((viralityScore / 5) * 100)}%
                     </div>
                     <div className="text-xs font-medium text-muted-foreground">Viral potential</div>
                   </div>
@@ -156,8 +170,13 @@ export function AnalyticsModal({
 
             {/* STEPPS Metrics */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                STEPPS Metrics
+              <h3 className="flex items-center justify-between text-sm font-semibold text-foreground uppercase tracking-wide">
+                <span>STEPPS Metrics</span>
+                {steppsScore !== undefined && (
+                  <span className="bg-chart-1/10 text-chart-1 rounded-full px-2 py-0.5 text-xs font-bold">
+                    {steppsScore.toFixed(1)}/5
+                  </span>
+                )}
               </h3>
               <div className="space-y-4 rounded-xl border border-chart-1/20 bg-chart-1/5 p-4 dark:bg-chart-1/10">
                 {steppsMetrics.map((metric) => (
@@ -168,8 +187,13 @@ export function AnalyticsModal({
 
             {/* Cognitive Metrics */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                Cognitive Metrics
+              <h3 className="flex items-center justify-between text-sm font-semibold text-foreground uppercase tracking-wide">
+                <span>Cognitive Metrics</span>
+                {cognitiveScore !== undefined && (
+                  <span className="bg-chart-2/10 text-chart-2 rounded-full px-2 py-0.5 text-xs font-bold">
+                    {cognitiveScore.toFixed(1)}/5
+                  </span>
+                )}
               </h3>
               <div className="space-y-4 rounded-xl border border-chart-2/25 bg-chart-2/5 p-4 dark:bg-chart-2/10">
                 {cognitiveMetrics.map((metric) => (
@@ -180,8 +204,13 @@ export function AnalyticsModal({
 
             {/* Tipping Point Metrics */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                Tipping Point Metrics
+              <h3 className="flex items-center justify-between text-sm font-semibold text-foreground uppercase tracking-wide">
+                <span>Tipping Point Metrics</span>
+                {tippingScore !== undefined && (
+                  <span className="bg-chart-3/10 text-chart-3 rounded-full px-2 py-0.5 text-xs font-bold">
+                    {tippingScore.toFixed(1)}/5
+                  </span>
+                )}
               </h3>
               <div className="space-y-4 rounded-xl border border-chart-3/25 bg-chart-3/5 p-4 dark:bg-chart-3/10">
                 {tippingPointMetrics.map((metric) => (
@@ -196,7 +225,7 @@ export function AnalyticsModal({
               <h3 className="text-sm font-semibold text-foreground">AI Reasoning</h3>
               <div
                 className={`rounded-xl border border-border bg-muted/40 p-4 transition-all duration-300 ${
-                  expandedReasoning ? 'max-h-96 overflow-y-auto' : 'max-h-24'
+                  expandedReasoning ? 'max-h-96 overflow-y-auto' : 'max-h-24 overflow-hidden'
                 }`}
               >
                 <p className="text-sm leading-relaxed text-muted-foreground">{reasoning}</p>

@@ -3,7 +3,7 @@ import { MAX_BODY_BYTES, parseMemeJsonBody } from '@/lib/meme-payload';
 import { rateLimitGuard } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 900;
 
 /**
  * Proxies meme generation to n8n using server-only env (no webhook URL in the browser).
@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     headers['X-Webhook-Secret'] = secret;
   }
 
-  const upstreamBody = JSON.stringify({ body: parsed.data });
+  // n8n Webhook node exposes request JSON at: $json.body
+  // So we must send the payload directly (not nested under "body"),
+  // otherwise n8n would see $json.body.body.brand_name, etc.
+  const upstreamBody = JSON.stringify(parsed.data);
 
   let upstream: Response;
   try {
@@ -54,7 +57,8 @@ export async function POST(request: Request) {
       method: 'POST',
       headers,
       body: upstreamBody,
-      signal: AbortSignal.timeout(110_000),
+      // n8n pipeline can have highly variable latency.
+      signal: AbortSignal.timeout(890_000),
     });
   } catch {
     return NextResponse.json({ error: 'Upstream unavailable', code: 'UPSTREAM' }, { status: 502 });
@@ -62,18 +66,38 @@ export async function POST(request: Request) {
 
   const text = await upstream.text();
   if (!upstream.ok) {
-    return NextResponse.json({ error: 'Generation failed', code: 'UPSTREAM_STATUS' }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: 'Generation failed',
+        code: 'UPSTREAM_STATUS',
+        upstreamStatus: upstream.status,
+        upstreamBody: text.slice(0, 2000),
+      },
+      { status: 502 }
+    );
   }
 
-  let data: unknown;
+  if (!text) {
+    return NextResponse.json({ error: 'Empty upstream response', code: 'UPSTREAM_EMPTY' }, { status: 502 });
+  }
+
   try {
-    data = text ? JSON.parse(text) : null;
+    const data = JSON.parse(text) as unknown;
+    return NextResponse.json(data, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch {
-    return NextResponse.json({ error: 'Invalid upstream response', code: 'UPSTREAM_JSON' }, { status: 502 });
+    // Some n8n configurations may return plain text.
+    return NextResponse.json(
+      {
+        ok: true,
+        raw: text,
+      },
+      {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store' },
+      }
+    );
   }
-
-  return NextResponse.json(data, {
-    status: 200,
-    headers: { 'Cache-Control': 'no-store' },
-  });
 }

@@ -11,6 +11,9 @@ export type MemeResult = {
   id: string;
   image: string;
   viralityScore: number;
+  steppsScore?: number;
+  cognitiveScore?: number;
+  tippingScore?: number;
   reasoning: string;
   parameters?: {
     socialCurrency?: number;
@@ -29,19 +32,71 @@ export type MemeResult = {
   };
 };
 
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function normalizeParameters(input: unknown): MemeResult['parameters'] | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const p = input as Record<string, unknown>;
+
+  const normalized: MemeResult['parameters'] = {
+    socialCurrency: asNumber(p.socialCurrency ?? p.social_currency),
+    triggers: asNumber(p.triggers),
+    emotion: asNumber(p.emotion),
+    public: asNumber(p.public ?? p.public_value),
+    practicalValue: asNumber(p.practicalValue ?? p.practical_value),
+    story: asNumber(p.story ?? p.storytelling),
+    visualFamiliarity: asNumber(p.visualFamiliarity ?? p.visual_familiarity),
+    textDensity: asNumber(p.textDensity ?? p.text_density),
+    sentimentPolarity: asNumber(p.sentimentPolarity ?? p.sentiment_polarity),
+    subjectProminence: asNumber(p.subjectProminence ?? p.subject_prominence),
+    visualHook: asNumber(p.visualHook ?? p.visual_hook ?? p.visual_hooks),
+    shareFriction: asNumber(p.shareFriction ?? p.share_friction),
+    relatabilityBreadth: asNumber(p.relatabilityBreadth ?? p.relatability_breadth),
+  };
+
+  const hasAny = Object.values(normalized).some((v) => typeof v === 'number');
+  return hasAny ? normalized : undefined;
+}
+
 function normalizeMemesFromApi(data: unknown): MemeResult[] {
-  const raw = Array.isArray(data) ? data : (data as { memes?: unknown })?.memes;
-  if (!Array.isArray(raw)) return [];
-  return raw.map((m: Record<string, unknown>, index: number) => ({
-    id: String(m.id ?? index + 1),
-    image: String(m.image ?? m.meme_url ?? m.url ?? ''),
-    viralityScore: Number(m.viralityScore ?? m.virality_score ?? 0),
-    reasoning: String(m.reasoning ?? m.reasoning_text ?? ''),
-    parameters:
-      m.parameters && typeof m.parameters === 'object' && !Array.isArray(m.parameters)
-        ? (m.parameters as MemeResult['parameters'])
-        : undefined,
-  }));
+  const obj = data as Record<string, unknown> | null;
+
+  const pickArray = (value: unknown): unknown[] | null => (Array.isArray(value) ? value : null);
+
+  const raw =
+    pickArray(data) ??
+    (obj && pickArray(obj.memes)) ??
+    (obj && pickArray(obj.data)) ??
+    (obj && typeof obj.data === 'object' && obj.data !== null && pickArray((obj.data as Record<string, unknown>).memes)) ??
+    null;
+
+  if (!raw) return [];
+  return raw
+    .map((m: Record<string, unknown>, index: number) => {
+      const inner =
+        m.json && typeof m.json === 'object' && m.json !== null && !Array.isArray(m.json)
+          ? (m.json as Record<string, unknown>)
+          : m;
+
+      const image = String(inner.image ?? inner.meme_url ?? inner.url ?? inner.memeUrl ?? '');
+      return {
+        id: String(inner.id ?? index + 1),
+        image,
+        viralityScore: Number(inner.viralityScore ?? inner.virality_score ?? inner.virality_score ?? 0),
+        steppsScore: Number(inner.steppsScore ?? inner.stepps_score ?? 0),
+        cognitiveScore: Number(inner.cognitiveScore ?? inner.cognitive_score ?? 0),
+        tippingScore: Number(inner.tippingScore ?? inner.tipping_score ?? 0),
+        reasoning: String(inner.reasoning ?? inner.reasoning_text ?? inner.error_message ?? ''),
+        parameters: normalizeParameters(inner.parameters),
+      };
+    });
 }
 
 export default function Home() {
@@ -49,6 +104,7 @@ export default function Home() {
   const [memes, setMemes] = useState<MemeResult[] | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   const handleGenerateMemes = async (e: React.FormEvent, payload: MemeGenerationPayload) => {
     e.preventDefault();
@@ -56,6 +112,7 @@ export default function Home() {
     setIsLoading(true);
     setIsOffline(false);
     setIsRateLimited(false);
+    setErrorDetail(null);
 
     try {
       const response = await fetch('/api/meme', {
@@ -73,6 +130,26 @@ export default function Home() {
       }
 
       if (!response.ok) {
+        try {
+          const err = (await response.json()) as {
+            error?: string;
+            code?: string;
+            upstreamStatus?: number;
+            upstreamBody?: string;
+          };
+          const detail = [
+            err.error || 'Request failed',
+            err.code ? `(code: ${err.code})` : '',
+            err.upstreamStatus ? `(upstream status: ${err.upstreamStatus})` : '',
+            err.upstreamBody ? `\n${err.upstreamBody}` : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+          if (detail) setErrorDetail(detail);
+        } catch {
+          // Fall back to generic offline state below.
+        }
         setMemes(null);
         setIsOffline(true);
         return;
@@ -87,7 +164,11 @@ export default function Home() {
         return;
       }
 
-      setMemes(normalizeMemesFromApi(data));
+      const normalized = normalizeMemesFromApi(data);
+      if (normalized.length === 0) {
+        setErrorDetail('No meme results were returned by backend.');
+      }
+      setMemes(normalized);
     } catch {
       setMemes(null);
       setIsOffline(true);
@@ -125,7 +206,22 @@ export default function Home() {
           </div>
         )}
 
-        {isOffline && !isRateLimited && !isLoading && <OfflineError />}
+        {isOffline && !isRateLimited && !isLoading && (
+          <div className="space-y-4">
+            <OfflineError />
+            {errorDetail && (
+              <div
+                className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+                role="alert"
+              >
+                <p className="font-semibold">API details</p>
+                <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">
+                  {errorDetail}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
 
         {memes && !isLoading && !isOffline && (
           <div className="space-y-8">
@@ -137,6 +233,13 @@ export default function Home() {
                 Ranked by virality potential — open analytics on any card for the full breakdown.
               </p>
             </div>
+
+            {memes.length === 0 && errorDetail && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm" role="status">
+                <p className="font-semibold text-destructive">No results</p>
+                <p className="mt-2 text-muted-foreground">{errorDetail}</p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {memes.map((meme) => (

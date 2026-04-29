@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'admeme - AI Meme Generator',
+  title: 'Admeme',
   description: 'Generate viral-worthy memes tailored to your brand and audience with AI-powered insights',
   generator: 'v0.app',
   icons: {

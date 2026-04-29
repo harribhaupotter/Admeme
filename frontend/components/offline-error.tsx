@@ -43,12 +43,12 @@ export function OfflineError() {
             className="inline-flex items-center justify-center gap-2 shadow-md shadow-primary/20"
           >
             <a
-              href="https://github.com/harribhaupotter"
+              href="https://github.com/harribhaupotter/Admeme"
               target="_blank"
               rel="noopener noreferrer"
             >
               <Github className="w-4 h-4" />
-              Contact @harribhaupotter to wake it up
+              Open project repository
             </a>
           </Button>
 
