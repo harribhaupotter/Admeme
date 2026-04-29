@@ -44,22 +44,22 @@ export function MemeForm({ onGenerateMemes, isLoading }: MemeFormProps) {
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-border bg-card/90 p-8 shadow-xl shadow-primary/10 ring-1 ring-primary/10 backdrop-blur-md transition-shadow duration-300 hover:shadow-2xl hover:shadow-primary/15">
-      <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-primary/25 to-chart-4/20 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-chart-2/15 blur-2xl" />
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 p-8 sm:p-12 shadow-2xl backdrop-blur-2xl transition-shadow duration-500 hover:shadow-white/5 hover:border-white/20">
+      <div className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 h-56 w-56 rounded-full bg-white/5 blur-3xl" />
 
       <div className="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/30">
-              <Grid3x3 className="h-5 w-5" aria-hidden />
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-black shadow-lg shadow-white/20">
+              <Grid3x3 className="h-6 w-6" aria-hidden />
             </span>
-            <Badge className="border-0 bg-secondary/90 text-secondary-foreground hover:bg-secondary">
+            <Badge className="border border-white/20 bg-transparent text-white/80 hover:bg-white/10 px-3 py-1 text-xs">
               Brand-safe AI
             </Badge>
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-foreground">
-            AI meme generator
+            Admeme
           </h1>
           <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
             Tune audience, goal, and tone — we rank concepts and explain why they might spread.
@@ -162,7 +162,7 @@ export function MemeForm({ onGenerateMemes, isLoading }: MemeFormProps) {
           disabled={
             isLoading || !brandName || !productOrService || !targetAudience || !campaignGoal || !tone
           }
-          className="mt-4 w-full px-8 py-6 text-base font-semibold shadow-lg shadow-primary/25 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-primary/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 md:w-auto"
+          className="mt-6 w-full px-8 py-7 rounded-2xl text-lg font-bold bg-white text-black shadow-lg shadow-white/10 transition-all duration-300 hover:scale-[1.02] hover:shadow-white/20 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 md:w-auto"
         >
           {isLoading ? (
             <>

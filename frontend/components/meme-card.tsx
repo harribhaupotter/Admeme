@@ -1,7 +1,8 @@
 'use client';
 
-import { Download, BarChart2 } from 'lucide-react';
-import { useState } from 'react';
+import { Download, BarChart2, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { AnalyticsModal } from '@/components/analytics-modal';
 
@@ -32,7 +33,13 @@ interface MemeCardProps {
 
 export function MemeCard({ id, image, viralityScore, steppsScore, cognitiveScore, tippingScore, reasoning, parameters }: MemeCardProps) {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const hasImage = Boolean(image && image.trim().length > 0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const getScoreColor = (score: number) => {
     if (score > 3.5)
@@ -56,7 +63,12 @@ export function MemeCard({ id, image, viralityScore, steppsScore, cognitiveScore
     <div className="group overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10">
       <div className="relative aspect-square overflow-hidden bg-muted">
         {hasImage ? (
-          <img src={image} alt={`Meme ${id}`} className="w-full h-full object-cover" />
+          <img 
+            src={image} 
+            alt={`Meme ${id}`} 
+            className="w-full h-full object-cover cursor-pointer transition-transform hover:scale-105" 
+            onClick={() => setIsZoomed(true)}
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
             Meme image unavailable
@@ -111,6 +123,23 @@ export function MemeCard({ id, image, viralityScore, steppsScore, cognitiveScore
         reasoning={reasoning}
         parameters={parameters}
       />
+
+      {mounted && isZoomed && hasImage && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" onClick={() => setIsZoomed(false)}>
+          <div className="relative max-w-5xl max-h-[90vh] w-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute -top-12 right-0 sm:-right-12 sm:top-0 rounded-full bg-background/20 hover:bg-background/40 text-foreground"
+              onClick={() => setIsZoomed(false)}
+            >
+              <X className="h-6 w-6" />
+            </Button>
+            <img src={image} alt={`Meme ${id} zoomed`} className="max-w-full max-h-[85vh] object-contain rounded-md shadow-2xl" />
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -53,6 +53,13 @@ export async function POST(request: Request) {
 
   let upstream: Response;
   try {
+    // [PRESENTATION MODE] Send a background ping to the Jarvis Ngrok server so the terminal logs light up
+    fetch("https://eriophyllous-unrash-jeana.ngrok-free.dev/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: upstreamBody
+    }).catch(() => {}); // Ignore errors silently so it doesn't break the actual app
+    
     upstream = await fetch(webhookUrl, {
       method: 'POST',
       headers,

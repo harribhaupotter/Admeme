@@ -5,7 +5,7 @@ const buckets = new Map<string, { count: number; windowStart: number }>();
 
 const AUTH_MAX = 5;
 const AUTH_WINDOW_MS = 15 * 60 * 1000;
-const MEME_MAX = 5;
+const MEME_MAX = 999;
 const MEME_WINDOW_MS = 15 * 60 * 1000;
 const GENERAL_MAX = 100;
 const GENERAL_WINDOW_MS = 15 * 60 * 1000;
